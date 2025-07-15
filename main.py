@@ -1,60 +1,47 @@
-import os
 from telegram import Update, InputFile
-from telegram.ext import ApplicationBuilder, MessageHandler, filters, ContextTypes
-from PIL import Image
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 import fitz  # PyMuPDF
-import tempfile
+import os
+import img2pdf
+from PIL import Image
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Convert images to PDF
-async def handle_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photos = update.message.photo
-    if not photos:
-        await update.message.reply_text("Please send an image.")
-        return
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Send me a PDF or image and I’ll convert it!")
 
-    photo_file = await photos[-1].get_file()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as img_temp:
-        await photo_file.download_to_drive(img_temp.name)
-        pdf_path = img_temp.name.replace(".jpg", ".pdf")
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    file = await update.message.document.get_file()
+    file_path = f"downloads/{file.file_unique_id}_{file.file_path.split('/')[-1]}"
+    await file.download_to_drive(file_path)
 
-        image = Image.open(img_temp.name).convert("RGB")
-        image.save(pdf_path, "PDF")
+    if file_path.endswith('.pdf'):
+        # Convert PDF to image (first page)
+        images = convert_pdf_to_images(file_path)
+        if images:
+            await update.message.reply_photo(images[0])
+    elif file_path.lower().endswith(('.jpg', '.jpeg', '.png')):
+        # Convert image to PDF
+        pdf_path = file_path.rsplit('.', 1)[0] + '.pdf'
+        with open(pdf_path, "wb") as f:
+            f.write(img2pdf.convert(file_path))
+        await update.message.reply_document(InputFile(pdf_path))
+    else:
+        await update.message.reply_text("Unsupported file type.")
 
-        await update.message.reply_document(InputFile(pdf_path), filename="converted.pdf")
-
-    os.remove(img_temp.name)
-    os.remove(pdf_path)
-
-# Convert PDF to images
-async def handle_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    document = update.message.document
-    if not document or not document.file_name.endswith(".pdf"):
-        await update.message.reply_text("Please send a PDF file.")
-        return
-
-    file = await document.get_file()
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
-        await file.download_to_drive(temp_pdf.name)
-        pdf_path = temp_pdf.name
-
+def convert_pdf_to_images(pdf_path):
+    images = []
     doc = fitz.open(pdf_path)
-    for i, page in enumerate(doc):
+    for page in doc:
         pix = page.get_pixmap()
-        img_path = f"{pdf_path}_{i}.jpg"
-        pix.save(img_path)
+        output = f"{pdf_path}_page.png"
+        pix.save(output)
+        images.append(open(output, "rb"))
+        break  # Just first page
+    return images
 
-        await update.message.reply_photo(InputFile(img_path))
-
-        os.remove(img_path)
-
-    os.remove(pdf_path)
-
-# Main
-app = ApplicationBuilder().token(BOT_TOKEN).build()
-app.add_handler(MessageHandler(filters.Document.PDF, handle_pdf))
-app.add_handler(MessageHandler(filters.PHOTO, handle_image))
-
-app.run_polling()
-
+if __name__ == '__main__':
+    app = ApplicationBuilder().token(BOT_TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_file))
+    app.run_polling()
