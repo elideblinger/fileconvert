@@ -43,7 +43,7 @@ async def convert_pdf_to_images(update, file_bytes):
         await update.message.reply_text(f"PDF to Image failed: {e}")
 
 if __name__ == "__main__":
-    print("🔥 Starting bot")  # This will show up in logs to confirm correct file
+    print("🔥❤️ Starting bot")  # This will show up in logs to confirm correct file
     if not BOT_TOKEN:
         print("❌ Missing BOT_TOKEN environment variable.")
         exit(1)
