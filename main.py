@@ -10,14 +10,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Send me an image to convert to PDF or a PDF to convert to images.")
 
 async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = update.message.document or update.message.photo[-1]
-    file_info = await file.get_file()
-    file_bytes = await file_info.download_as_bytearray()
+    file = None
+    file_bytes = None
 
-    if file.file_name and file.file_name.lower().endswith(".pdf"):
+    if update.message.document:
+        file = update.message.document
+        tg_file = await file.get_file()
+        file_bytes = await tg_file.download_as_bytearray()
+
+    elif update.message.photo:
+        file = update.message.photo[-1]  # highest resolution photo
+        tg_file = await file.get_file()
+        file_bytes = await tg_file.download_as_bytearray()
+
+    else:
+        await update.message.reply_text("Please send a photo or PDF.")
+        return
+
+    if hasattr(file, 'file_name') and file.file_name.lower().endswith(".pdf"):
         await convert_pdf_to_images(update, file_bytes)
     else:
-        await convert_images_to_pdf(update, file_bytes)
+        await convert_images_to_pdf(update, file, file_bytes)
 
 async def convert_images_to_pdf(update, file_bytes):
     try:
