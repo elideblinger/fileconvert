@@ -34,7 +34,9 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def convert_images_to_pdf(update, file_bytes):
     try:
-        img = Image.open(file_bytes)
+        from io import BytesIO
+
+img = Image.open(BytesIO(file_bytes))
         img = img.convert("RGB")
         output_path = "/tmp/output.pdf"
         img.save(output_path, "PDF")
